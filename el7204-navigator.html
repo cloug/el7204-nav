@@ -202,20 +202,20 @@ async function connectBluetooth() {
     try {
         // CORRECTION ICI : On cherche les appareils dont le nom commence par "DOMYOS" ou "EL"
         // Tout en déclarant qu'on aura besoin du service FTMS (0x1826)
-        btDevice = await navigator.bluetooth.requestDevice({
-            filters: [
-                { namePrefix: 'DOMYOS' },
-                { namePrefix: 'EL' },
-                { namePrefix: 'DOMYOS-EL' }
-            ],
-            optionalServices: [FTMS_SERVICE] // FTMS_SERVICE vaut bien 0x1826
-        });
+        //btDevice = await navigator.bluetooth.requestDevice({
+         //   filters: [
+         //       { namePrefix: 'DOMYOS' },
+          //      { namePrefix: 'EL' },
+          //      { namePrefix: 'DOMYOS-EL' }
+          //  ],
+          //  optionalServices: [FTMS_SERVICE] // FTMS_SERVICE vaut bien 0x1826
+        //});
         
         // Si vous préférez voir TOUS les appareils sans filtrer sur le nom, utilisez plutôt :
-        // btDevice = await navigator.bluetooth.requestDevice({
-        //     acceptAllDevices: true,
-        //     optionalServices: [FTMS_SERVICE]
-        // });
+        btDevice = await navigator.bluetooth.requestDevice({
+             acceptAllDevices: true,
+            optionalServices: [FTMS_SERVICE]
+        });
 
         btDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
