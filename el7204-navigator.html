@@ -189,7 +189,6 @@ const INDOOR_BIKE_DATA = 0x2AD2; // Indoor Bike Data (fallback)
 const TREADMILL_DATA   = 0x2ACD; // Treadmill Data (fallback)
 
 let btDevice = null;
-
 async function connectBluetooth() {
     if (!navigator.bluetooth) {
         setStatus('⚠️ Web Bluetooth non dispo — utilise Chrome sur Android');
@@ -201,11 +200,23 @@ async function connectBluetooth() {
     setStatus('Recherche de l\'elliptique en Bluetooth…');
 
     try {
-        // Filtre sur le service FTMS standard
+        // CORRECTION ICI : On cherche les appareils dont le nom commence par "DOMYOS" ou "EL"
+        // Tout en déclarant qu'on aura besoin du service FTMS (0x1826)
         btDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [FTMS_SERVICE] }],
-            optionalServices: [FTMS_SERVICE]
+            filters: [
+                { namePrefix: 'DOMYOS' },
+                { namePrefix: 'EL' },
+                { namePrefix: 'DOMYOS-EL' }
+            ],
+            optionalServices: [FTMS_SERVICE] // FTMS_SERVICE vaut bien 0x1826
         });
+        
+        // Si vous préférez voir TOUS les appareils sans filtrer sur le nom, utilisez plutôt :
+        // btDevice = await navigator.bluetooth.requestDevice({
+        //     acceptAllDevices: true,
+        //     optionalServices: [FTMS_SERVICE]
+        // });
+
         btDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
         const server  = await btDevice.gatt.connect();
