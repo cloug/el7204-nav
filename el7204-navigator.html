@@ -10,13 +10,9 @@
         body { background: #111827; color: #f3f4f6; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
         #header {
-            background: #1f2937;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #374151;
-            flex-shrink: 0;
+            background: #1f2937; padding: 10px 14px;
+            display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid #374151; flex-shrink: 0;
         }
         #connect-btn {
             background: #2563eb; border: none; color: white;
@@ -38,23 +34,24 @@
             min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
 
-        /* BANDEAU DE DIFFICULTÉ ET CONTRÔLE DE LA CONSOLE */
+        /* BANDEAU DE LOGS INTERNES POUR LE DIAGNOSTIC */
+        #log-box {
+            background: #000000; color: #22c55e; font-family: monospace;
+            font-size: 11px; padding: 6px 14px; max-height: 75px;
+            overflow-y: auto; border-bottom: 1px solid #1f2937; flex-shrink: 0;
+        }
+
         #control-panel {
-            background: #111827;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            border-bottom: 1px solid #1f2937;
-            flex-shrink: 0;
+            background: #111827; padding: 10px 14px;
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+            border-bottom: 1px solid #1f2937; flex-shrink: 0;
         }
         .panel-label { font-size: 13px; font-weight: 600; color: #9ca3af; text-transform: uppercase; }
         .ctrl-btn {
             background: #374151; border: 1px solid #4b5563; color: white;
             width: 44px; height: 44px; border-radius: 50%; cursor: pointer; 
             font-size: 18px; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2); touch-action: manipulation;
+            touch-action: manipulation;
         }
         .ctrl-btn:active { background: #4b5563; }
         #res-val { font-size: 22px; font-weight: 800; color: #f59e0b; min-width: 32px; text-align: center; }
@@ -86,16 +83,6 @@
             font-size: 20px; z-index: 1000;
         }
 
-        #debug {
-            position: absolute; top: 8px; left: 8px;
-            background: rgba(0,0,0,0.85); color: #4ade80;
-            font-size: 10px; font-family: monospace;
-            padding: 8px 12px; border-radius: 6px;
-            z-index: 1000; display: none;
-            max-width: 260px; word-break: break-all; line-height: 1.6;
-            border: 1px solid #22c55e;
-        }
-
         #footer {
             background: #1f2937; padding: 6px 14px;
             font-size: 11px; color: #9ca3af;
@@ -109,8 +96,10 @@
 <div id="header">
     <button id="connect-btn" onclick="connectBluetooth()">📡 Connecter</button>
     <button id="sim-btn"     onclick="toggleSimulation()">▶ Simuler</button>
-    <span id="status">Connecte l'elliptique ou utilise ▶ Simuler</span>
+    <span id="status">Prêt pour appairage.</span>
 </div>
+
+<div id="log-box">Console système prête. Attente de connexion...</div>
 
 <div id="control-panel">
     <span class="panel-label">⚡ Difficulté</span>
@@ -132,49 +121,38 @@
 <div id="map-container">
     <div id="map"></div>
     <div id="compass">➡️</div>
-    <div id="debug"></div>
 </div>
 
-<div id="footer">Tap sur la carte pour changer de direction · Gère la difficulté via ➖/➕</div>
+<div id="footer">Cliquez sur la carte pour définir un cap · Modifiez la difficulté avec ➖/➕</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 
 // ══════════════════════════════════════════════════════════════
-//  MAP & GEOGRAPHIE
+//  CARTOGRAPHIE
 // ══════════════════════════════════════════════════════════════
-let pos       = { lat: 50.6418, lng: 5.5721 }; 
-let heading   = 90;   
-let mapDistKm = 0;
-let startTime = null;
-let currentSpeed = 0; 
+let pos = { lat: 50.6418, lng: 5.5721 }; 
+let heading = 90; let mapDistKm = 0; let startTime = null; let currentSpeed = 0; 
 
 const map = L.map('map', { center: [pos.lat, pos.lng], zoom: 16 });
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap', maxZoom: 19
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OS M', maxZoom: 19 }).addTo(map);
 
 const playerMarker = L.marker([pos.lat, pos.lng], {
     icon: L.divIcon({
-        html: '<div style="width:18px;height:18px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>',
+        html: '<div style="width:18px;height:18px;background:#3b82f6;border:3px solid white;border-radius:50%;"></div>',
         iconSize: [18, 18], iconAnchor: [9, 9], className: ''
     })
 }).addTo(map);
 
 const pathCoords = [[pos.lat, pos.lng]];
-const pathLine   = L.polyline(pathCoords, { color: '#3b82f6', weight: 3, opacity: 0.65 }).addTo(map);
-
+const pathLine = L.polyline(pathCoords, { color: '#3b82f6', weight: 3, opacity: 0.65 }).addTo(map);
 let destMarker = null;
 
 map.on('click', e => {
     heading = bearing(pos.lat, pos.lng, e.latlng.lat, e.latlng.lng);
     if (destMarker) map.removeLayer(destMarker);
-    destMarker = L.circleMarker(e.latlng, {
-        radius: 8, color: '#f59e0b', fillColor: '#fbbf24', fillOpacity: 0.55, weight: 2
-    }).addTo(map);
+    destMarker = L.circleMarker(e.latlng, { radius: 8, color: '#f59e0b', fillColor: '#fbbf24', fillOpacity: 0.5, weight: 2 }).addTo(map);
     updateCompass();
-    setStatus(`Cap réorienté : ${Math.round(heading)}°`);
 });
 
 function bearing(lat1, lng1, lat2, lng2) {
@@ -203,28 +181,33 @@ function updateCompass() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  BLUETOOTH FTMS MULTI-PARSING + CONTROL POINT (0x2AD9)
+//  BLUETOOTH FTMS BLINDÉ SANS ABONNEMENT EN BOUCLE
 // ══════════════════════════════════════════════════════════════
 const FTMS_SERVICE     = 0x1826;
 const ELLIPTICAL_DATA  = 0x2ACE; 
-const INDOOR_BIKE_DATA = 0x2AD2; // Utilisé par beaucoup de firmwares Domyos unifiés
-const TREADMILL_DATA   = 0x2ACD; 
-const FTMS_CTRL_POINT  = 0x2AD9; // Caractéristique de contrôle de l'appareil
+const INDOOR_BIKE_DATA = 0x2AD2; 
+const FTMS_CTRL_POINT  = 0x2AD9; 
 
 let btDevice = null;
-let usedUUID = null;
-let fmcpChar = null; // Contiendra la référence pour piloter la difficulté
+let fmcpChar = null; 
 let currentResistance = 1;
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+function log(text) {
+    const box = document.getElementById('log-box');
+    box.innerHTML += `<br>➡️ ${text}`;
+    box.scrollTop = box.scrollHeight;
+}
 
 async function connectBluetooth() {
     if (!navigator.bluetooth) {
-        setStatus('⚠️ Web Bluetooth non dispo. Utilisez Chrome sur Android/PC.');
+        setStatus('⚠️ Web Bluetooth non supporté.');
         return;
     }
     const btn = document.getElementById('connect-btn');
-    btn.className = 'connecting';
-    btn.textContent = '⏳ Scan...';
-    setStatus('Recherche de l\'équipement...');
+    btn.className = 'connecting'; btn.textContent = '⏳ Scan...';
+    document.getElementById('log-box').innerHTML = "Démarrage du scan Bluetooth...";
 
     try {
         btDevice = await navigator.bluetooth.requestDevice({
@@ -233,69 +216,75 @@ async function connectBluetooth() {
         });
 
         btDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
+        log("Appareil choisi. Connexion au serveur GATT...");
+        
         const server  = await btDevice.gatt.connect();
-        setStatus('Configuration des flux de données...');
+        log("Connecté au GATT. Recherche du service FTMS (0x1826)...");
+        
         const service = await server.getPrimaryService(FTMS_SERVICE);
+        log("Service FTMS trouvé.");
 
-        // 1. Détection et écoute de la caractéristique de données de mouvement
-        let dataChar = null;
-        for (const uuid of [ELLIPTICAL_DATA, INDOOR_BIKE_DATA, TREADMILL_DATA]) {
-            try {
-                dataChar = await service.getCharacteristic(uuid);
-                usedUUID = uuid;
-                break;
-            } catch (_) {}
+        // STRATÉGIE MULTI-ABONNEMENT : On s'abonne aux deux flux simultanément s'ils existent !
+        let activeSubscriptions = 0;
+        
+        // Test flux Vélo (Domyos l'utilise souvent par défaut)
+        try {
+            let bikeChar = await service.getCharacteristic(INDOOR_BIKE_DATA);
+            await bikeChar.startNotifications();
+            bikeChar.addEventListener('characteristicvaluechanged', (e) => parseFTMS(e, INDOOR_BIKE_DATA));
+            log("✅ Abonné avec succès au flux Vélo (0x2AD2)");
+            activeSubscriptions++;
+        } catch(_) { log("Flux Vélo (0x2AD2) absent ou refusé."); }
+
+        // Test flux Elliptique
+        try {
+            let crossChar = await service.getCharacteristic(ELLIPTICAL_DATA);
+            await crossChar.startNotifications();
+            crossChar.addEventListener('characteristicvaluechanged', (e) => parseFTMS(e, ELLIPTICAL_DATA));
+            log("✅ Abonné avec succès au flux Elliptique (0x2ACE)");
+            activeSubscriptions++;
+        } catch(_) { log("Flux Elliptique (0x2ACE) absent ou refusé."); }
+
+        if(activeSubscriptions === 0) {
+            throw new Error("La machine ne fournit aucun flux de données compatible FTMS.");
         }
-        if (!dataChar) throw new Error('Protocole FTMS non reconnu sur cet appareil');
 
-        await dataChar.startNotifications();
-        dataChar.addEventListener('characteristicvaluechanged', parseFTMS);
-
-        // 2. INITIALISATION DU PROTOCOLE DE CONTRÔLE (Fitness Machine Control Point)
+        // INITIALISATION SÉCURISÉE DU POINT DE CONTRÔLE SANS ABONNEMENT CRASH-INDUCER
         try {
             fmcpChar = await service.getCharacteristic(FTMS_CTRL_POINT);
-            await fmcpChar.startNotifications();
-            fmcpChar.addEventListener('characteristicvaluechanged', parseFMCPResponse);
+            log("Axe de contrôle de résistance trouvé (0x2AD9).");
             
-            setStatus('Initialisation de la console...');
-            // Commande 0x00 : Request Control (Prendre la main sur la console)
-            await sendFmcpCommand(new Uint8Array([0x00]));
-            // Commande 0x07 : Start/Resume (Dire à la console que l'exercice commence)
-            await sendFmcpCommand(new Uint8Array([0x07]));
-            
-            setStatus('Console prête et déverrouillée ! Pédalez.');
-        } catch (cpErr) {
-            console.warn("Control Point non supporté ou verrouillé :", cpErr);
-            setStatus('Connecté en lecture seule (Contrôle niveau indisponible)');
+            // Étape 1 : Request Control (0x00)
+            log("Envoi de l'ordre : Demande de contrôle (0x00)...");
+            await fmcpChar.writeValueWithResponse(new Uint8Array([0x00]));
+            await delay(500); // Pause technique pour le microcontrôleur Domyos
+
+            // Envoi de l'ordre : Démarrer l'exercice (0x07)
+            log("Envoi de l'ordre : Démarrage session (0x07)...");
+            await fmcpChar.writeValueWithResponse(new Uint8Array([0x07]));
+            await delay(500);
+
+            // Ajustement initial à la difficulté 1 pour débloquer
+            await fmcpChar.writeValueWithResponse(new Uint8Array([0x04, 1]));
+            log("🚀 Console synchronisée et active ! COMMENCEZ A PÉDALER.");
+        } catch(cpErr) {
+            log("⚠️ Impossible de piloter la difficulté : " + cpErr.message);
         }
 
-        btn.className = 'connected';
-        btn.textContent = `🟢 Connecté`;
+        btn.className = 'connected'; btn.textContent = `🟢 Connecté`;
+        setStatus("Connecté. Pédalez !");
         if (!startTime) startTime = Date.now();
 
     } catch (err) {
-        btn.className = '';
-        btn.textContent = '📡 Connecter';
-        setStatus(err.name === 'NotFoundError' ? 'Scan annulé.' : `Erreur: ${err.message}`);
+        btn.className = ''; btn.textContent = '📡 Connecter';
+        log("❌ ERREUR COMPLÈTE : " + err.message);
+        setStatus(`Erreur générale.`);
     }
 }
 
-// Fonction d'envoi robuste sécurisant la compatibilité des navigateurs
-async function sendFmcpCommand(bytes) {
-    if (!fmcpChar) return;
-    if (fmcpChar.writeValueWithResponse) {
-        await fmcpChar.writeValueWithResponse(bytes);
-    } else {
-        await fmcpChar.writeValue(bytes);
-    }
-}
-
-// Gestion du changement de difficulté (Opcodes FTMS)
 async function adjustResistance(delta) {
     let target = currentResistance + delta;
-    if (target < 1) target = 1;
-    if (target > 32) target = 32; // Maximum générique Domyos
+    if (target < 1) target = 1; if (target > 32) target = 32;
     
     currentResistance = target;
     document.getElementById('res-val').textContent = target;
@@ -303,41 +292,29 @@ async function adjustResistance(delta) {
 
     if (fmcpChar) {
         try {
-            // Commande 0x04 : Set Target Resistance Level + valeur sur 1 octet
-            await sendFmcpCommand(new Uint8Array([0x04, target]));
+            log(`Envoi changement de niveau ➡️ ${target}`);
+            await fmcpChar.writeValueWithResponse(new Uint8Array([0x04, target]));
         } catch (e) {
-            console.error("Erreur de changement de difficulté:", e);
+            log("Erreur envoi résistance : " + e.message);
         }
-    }
-}
-
-function parseFMCPResponse(event) {
-    // Écoute les confirmations de la console suite à nos ordres (Optionnel mais propre)
-    const d = event.target.value;
-    if (d.byteLength >= 3 && d.getUint8(0) === 0x80) {
-        const initialOp = d.getUint8(1);
-        const result    = d.getUint8(2);
-        if (result !== 0x01) console.warn(`Commande FTMS 0x${initialOp.toString(16)} refusée (Code ${result})`);
+    } else {
+        log("Action impossible : le point de contrôle de la machine n'est pas lié.");
     }
 }
 
 function onDisconnected() {
     const btn = document.getElementById('connect-btn');
-    btn.className = '';
-    btn.textContent = '📡 Connecter';
-    currentSpeed = 0;
-    fmcpChar = null;
-    setStatus('Console déconnectée.');
+    btn.className = ''; btn.textContent = '📡 Connecter';
+    currentSpeed = 0; fmcpChar = null;
+    log("🔌 Console déconnectée physiquement.");
+    setStatus('Déconnecté.');
 }
 
-// Routeur intelligent de décodage selon le profil détecté
-function parseFTMS(event) {
+function parseFTMS(event, uuid) {
     const d = event.target.value;
     if (d.byteLength < 3) return;
 
-    debugBytes(d);
-
-    if (usedUUID === INDOOR_BIKE_DATA) {
+    if (uuid === INDOOR_BIKE_DATA) {
         parseIndoorBike(d);
     } else {
         parseCrossTrainer(d);
@@ -345,27 +322,20 @@ function parseFTMS(event) {
     if (!startTime) startTime = Date.now();
 }
 
-// Décodeur Profil Vélo (Utilisé par une grande partie des elliptiques Domyos récents)
 function parseIndoorBike(d) {
     const flags = d.getUint16(0, true);
     let off = 2;
-
     if ((flags & 0x0001) === 0 && off + 2 <= d.byteLength) {
         currentSpeed = d.getUint16(off, true) * 0.01;
         document.getElementById('val-speed').textContent = currentSpeed.toFixed(1);
         off += 2;
     }
     if (flags & 0x0002) off += 2;
-
     if (flags & 0x0004 && off + 2 <= d.byteLength) {
-        let cadence = d.getUint16(off, true) * 0.5; // Résolution 0.5 RPM
-        document.getElementById('val-cadence').textContent = Math.round(cadence);
+        document.getElementById('val-cadence').textContent = Math.round(d.getUint16(off, true) * 0.5);
         off += 2;
     }
-    if (flags & 0x0008) off += 2;
-    if (flags & 0x0010) off += 3;
-
-    // Récupération de la difficulté actuelle renvoyée par la machine
+    if (flags & 0x0008) off += 2; if (flags & 0x0010) off += 3;
     if (flags & 0x0020 && off + 2 <= d.byteLength) {
         const res = d.getInt16(off, true);
         document.getElementById('val-res').textContent = res;
@@ -378,39 +348,28 @@ function parseIndoorBike(d) {
         off += 2;
     }
     if (flags & 0x0080) off += 2;
-    if (flags & 0x0100 && off + 2 <= d.byteLength) {
-        document.getElementById('val-calories').textContent = d.getUint16(off, true);
-    }
+    if (flags & 0x0100 && off + 2 <= d.byteLength) document.getElementById('val-calories').textContent = d.getUint16(off, true);
 }
 
-// Décodeur Profil Elliptique Pur
 function parseCrossTrainer(d) {
     const flags = d.getUint16(0, true);
     let off = 2;
-
     if ((flags & 0x0001) === 0 && off + 2 <= d.byteLength) {
         currentSpeed = d.getUint16(off, true) * 0.01;
         document.getElementById('val-speed').textContent = currentSpeed.toFixed(1);
         off += 2;
     }
-    if (flags & 0x0002) off += 2;
-    if (flags & 0x0004) off += 3;
-
+    if (flags & 0x0002) off += 2; if (flags & 0x0004) off += 3;
     if (flags & 0x0008) {
         if (off + 2 <= d.byteLength) document.getElementById('val-cadence').textContent = d.getUint16(off, true);
         off += 4;
     }
-    if (flags & 0x0010) off += 2;
-    if (flags & 0x0020) off += 4;
-    if (flags & 0x0040) off += 4;
-
-    // Récupération de la difficulté actuelle renvoyée par la machine (Bit 7)
+    if (flags & 0x0010) off += 2; if (flags & 0x0020) off += 4; if (flags & 0x0040) off += 4;
     if (flags & 0x0080) {
         if (off + 2 <= d.byteLength) {
             const res = d.getInt16(off, true);
             document.getElementById('val-res').textContent = res;
-            currentResistance = res;
-            document.getElementById('res-val').textContent = res;
+            currentResistance = res; document.getElementById('res-val').textContent = res;
         }
         off += 2;
     }
@@ -419,23 +378,17 @@ function parseCrossTrainer(d) {
         off += 2;
     }
     if (flags & 0x0200) off += 2;
-    if (flags & 0x0400 && off + 2 <= d.byteLength) {
-        document.getElementById('val-calories').textContent = d.getUint16(off, true);
-    }
+    if (flags & 0x0400 && off + 2 <= d.byteLength) document.getElementById('val-calories').textContent = d.getUint16(off, true);
 }
 
 // ══════════════════════════════════════════════════════════════
-//  BOUCLE DE MISE A JOUR (1 Hz) & SIMULATION
+//  BOUCLE TEMPORELLE ET SIMULATION
 // ══════════════════════════════════════════════════════════════
 setInterval(() => {
-    if (currentSpeed > 0.2) {
-        moveByMeters(currentSpeed / 3.6);
-    }
+    if (currentSpeed > 0.2) moveByMeters(currentSpeed / 3.6);
     if (startTime) {
-        const sec  = Math.floor((Date.now() - startTime) / 1000);
-        const mm   = Math.floor(sec / 60);
-        const ss   = (sec % 60).toString().padStart(2, '0');
-        document.getElementById('val-time').textContent = `${mm}:${ss}`;
+        const sec = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('val-time').textContent = `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
     }
 }, 1000);
 
@@ -443,68 +396,22 @@ let simInterval = null, simT = 0;
 function toggleSimulation() {
     const btn = document.getElementById('sim-btn');
     if (simInterval) {
-        clearInterval(simInterval);
-        simInterval   = null;
-        currentSpeed  = 0;
+        clearInterval(simInterval); simInterval = null; currentSpeed = 0;
         document.getElementById('val-speed').textContent = '0.0';
-        btn.classList.remove('active');
-        btn.textContent = '▶ Simuler';
-        setStatus('Simulation arrêtée.');
+        btn.classList.remove('active'); btn.textContent = '▶ Simuler';
     } else {
         if (!startTime) startTime = Date.now();
-        btn.classList.add('active');
-        btn.textContent = '⏹ Stop';
-        setStatus('Simulation active.');
+        btn.classList.add('active'); btn.textContent = '⏹ Stop';
         simInterval = setInterval(() => {
-            simT += 0.08;
-            currentSpeed = 6.0 + 2.0 * Math.sin(simT);
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            document.getElementById('val-speed').textContent    = currentSpeed.toFixed(1);
-            document.getElementById('val-cadence').textContent  = Math.round(55 + 10 * Math.sin(simT));
-            document.getElementById('val-power').textContent    = Math.round(110 + 35 * Math.sin(simT));
-            document.getElementById('val-calories').textContent = Math.round(elapsed / 60 * 8);
+            simT += 0.08; currentSpeed = 6.0 + 2.0 * Math.sin(simT);
+            document.getElementById('val-speed').textContent = currentSpeed.toFixed(1);
+            document.getElementById('val-cadence').textContent = Math.round(55 + 10 * Math.sin(simT));
+            document.getElementById('val-power').textContent = Math.round(110 + 35 * Math.sin(simT));
         }, 1000);
     }
 }
 
-// Boîte noire de diagnostic (Activation via triple-tap sur la barre du haut)
-let debugActive = false, tapCount = 0, tapTimer;
-document.getElementById('header').addEventListener('click', () => {
-    tapCount++;
-    clearTimeout(tapTimer);
-    tapTimer = setTimeout(() => { tapCount = 0; }, 600);
-    if (tapCount >= 3) {
-        debugActive = !debugActive;
-        document.getElementById('debug').style.display = debugActive ? 'block' : 'none';
-        tapCount = 0;
-        setStatus(debugActive ? '🐛 Boîte noire de diagnostic active' : 'Diagnostic masqué');
-    }
-});
-
-function debugBytes(dataView) {
-    if (!debugActive) return;
-    const bytes = Array.from(new Uint8Array(dataView.buffer))
-        .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-        .join(' ');
-    const flags = dataView.getUint16(0, true).toString(2).padStart(16, '0');
-    document.getElementById('debug').innerHTML = `<strong>UUID:</strong> 0x${usedUUID ? usedUUID.toString(16).toUpperCase() : '??'}<br><strong>FLAGS:</strong> ${flags}<br><strong>DATA:</strong> ${bytes}`;
-}
-
-function setStatus(msg) {
-    document.getElementById('status').textContent = msg;
-}
-
-if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(p => {
-        pos.lat = p.coords.latitude;
-        pos.lng = p.coords.longitude;
-        playerMarker.setLatLng([pos.lat, pos.lng]);
-        pathCoords[0] = [pos.lat, pos.lng];
-        map.setView([pos.lat, pos.lng], 16);
-        setStatus('📍 Position GPS synchronisée. Prêt !');
-    });
-}
-
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
 updateCompass();
 </script>
 </body>
