@@ -182,16 +182,16 @@ function updateCompass() {
 // ══════════════════════════════════════════════════════════════
 //  BLUETOOTH / FTMS
 // ══════════════════════════════════════════════════════════════
-// UUIDs standard FTMS (Bluetooth SIG 0x1826)
 const FTMS_SERVICE     = 0x1826;
-const ELLIPTICAL_DATA  = 0x2ACE; // Elliptical Trainer Data
-const INDOOR_BIKE_DATA = 0x2AD2; // Indoor Bike Data (fallback)
-const TREADMILL_DATA   = 0x2ACD; // Treadmill Data (fallback)
+const ELLIPTICAL_DATA  = 0x2ACE; // Caractéristique Elliptique
+const INDOOR_BIKE_DATA = 0x2AD2; // Fallback Vélo
+const TREADMILL_DATA   = 0x2ACD; // Fallback Tapis
 
 let btDevice = null;
+
 async function connectBluetooth() {
     if (!navigator.bluetooth) {
-        setStatus('⚠️ Web Bluetooth non dispo — utilise Chrome sur Android');
+        setStatus('⚠️ Web Bluetooth non dispo — utilise Chrome sur Android/PC');
         return;
     }
     const btn = document.getElementById('connect-btn');
@@ -200,29 +200,19 @@ async function connectBluetooth() {
     setStatus('Recherche de l\'elliptique en Bluetooth…');
 
     try {
-        // CORRECTION ICI : On cherche les appareils dont le nom commence par "DOMYOS" ou "EL"
-        // Tout en déclarant qu'on aura besoin du service FTMS (0x1826)
-        //btDevice = await navigator.bluetooth.requestDevice({
-         //   filters: [
-         //       { namePrefix: 'DOMYOS' },
-          //      { namePrefix: 'EL' },
-          //      { namePrefix: 'DOMYOS-EL' }
-          //  ],
-          //  optionalServices: [FTMS_SERVICE] // FTMS_SERVICE vaut bien 0x1826
-        //});
-        
-        // Si vous préférez voir TOUS les appareils sans filtrer sur le nom, utilisez plutôt :
+        // Ouverture propre du scan sans erreur de syntaxe
         btDevice = await navigator.bluetooth.requestDevice({
              acceptAllDevices: true,
-            optionalServices: [FTMS_SERVICE]
+             optionalServices: [FTMS_SERVICE]
         });
 
         btDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
         const server  = await btDevice.gatt.connect();
+        setStatus('Connexion au service FTMS...');
         const service = await server.getPrimaryService(FTMS_SERVICE);
 
-        // Essaie Elliptical → Indoor Bike → Treadmill
+        // Exploration des caractéristiques selon le type de machine
         let char = null;
         let usedUUID = null;
         for (const uuid of [ELLIPTICAL_DATA, INDOOR_BIKE_DATA, TREADMILL_DATA]) {
@@ -230,23 +220,24 @@ async function connectBluetooth() {
                 char = await service.getCharacteristic(uuid);
                 usedUUID = uuid;
                 break;
-            } catch (_) { /* essaie suivant */ }
+            } catch (_) { /* continue vers le suivant si absent */ }
         }
-        if (!char) throw new Error('Aucune caractéristique FTMS trouvée sur cet appareil');
+        
+        if (!char) throw new Error('Aucune caractéristique FTMS compatible trouvée');
 
         await char.startNotifications();
         char.addEventListener('characteristicvaluechanged', parseFTMS);
 
         btn.className = 'connected';
         btn.textContent = `🟢 ${btDevice.name || 'Connecté'}`;
-        setStatus(`Connecté ✓ — char 0x${usedUUID.toString(16).toUpperCase()} · Pédale !`);
+        setStatus(`Connecté ! L'écran s'éteint, c'est normal. PÉDALE pour démarrer !`);
         if (!startTime) startTime = Date.now();
 
     } catch (err) {
         btn.className = '';
         btn.textContent = '📡 Connecter';
         if (err.name === 'NotFoundError') {
-            setStatus('Aucun appareil trouvé — allume l\'elliptique et réessaie');
+            setStatus('Aucun appareil sélectionné.');
         } else {
             setStatus(`Erreur: ${err.message}`);
         }
@@ -258,71 +249,80 @@ function onDisconnected() {
     btn.className = '';
     btn.textContent = '📡 Reconnecter';
     currentSpeed = 0;
-    setStatus('Déconnecté — appuie sur Connecter pour reconnecter');
+    setStatus('Déconnecté — Rallume la console et clique sur Reconnecter');
 }
 
-// ─── Parsing FTMS Elliptical Trainer Data (0x2ACE) ───────────────────
-// Spéc : Bluetooth FTMS 1.0, Table 4.13
-// Flags (16 bits) déterminent les champs présents
+// ─── Parsing sécurisé FTMS Elliptical Trainer Data (0x2ACE) ───
 function parseFTMS(event) {
-    const d = event.target.value;
-    if (d.byteLength < 3) return;
+    try {
+        const d = event.target.value;
+        if (d.byteLength < 3) return;
 
-    debugBytes(d); // activer via triple-tap sur le header
+        // Si le mode debug visuel est activé via le triple tap, on affiche les bytes reçus
+        debugBytes(d); 
 
-    const flags = d.getUint16(0, true);
-    let off = 2;
+        const flags = d.getUint16(0, true);
+        let off = 2;
 
-    // Bit 0 = 0  →  Instantaneous Speed présent (uint16, résolution 0.01 km/h)
-    if ((flags & 0x0001) === 0 && off + 2 <= d.byteLength) {
-        currentSpeed = d.getUint16(off, true) * 0.01;
-        document.getElementById('val-speed').textContent = currentSpeed.toFixed(1);
-        off += 2;
-    }
-    if (flags & 0x0002) { off += 2; }          // Average Speed
-    if (flags & 0x0004) { off += 3; }          // Total Distance (3 bytes, mètres)
-
-    // Bit 3  →  Step Rate (Instantaneous + Average, uint16 chacun, 1 step/min)
-    if (flags & 0x0008) {
-        if (off + 2 <= d.byteLength) {
-            document.getElementById('val-cadence').textContent = d.getUint16(off, true);
+        // Bit 0 = 0 → Vitesse Instantanée présente (résolution 0.01 km/h)
+        if ((flags & 0x0001) === 0) {
+            if (off + 2 <= d.byteLength) {
+                currentSpeed = d.getUint16(off, true) * 0.01;
+                document.getElementById('val-speed').textContent = currentSpeed.toFixed(1);
+                off += 2;
+            }
         }
-        off += 4;
-    }
-    if (flags & 0x0010) { off += 2; }          // Total Stride Count (uint16)
-    if (flags & 0x0020) { off += 4; }          // Elevation Gain +/- (2×uint16)
-    if (flags & 0x0040) { off += 4; }          // Inclination + Ramp Angle (2×sint16)
-    if (flags & 0x0080) { off += 2; }          // Resistance Level (sint16)
+        
+        if (flags & 0x0002) { off += 2; } // Sauter l'Average Speed si présent
+        if (flags & 0x0004) { off += 3; } // Sauter la Total Distance si présente
 
-    // Bit 8  →  Instantaneous Power (sint16, watts)
-    if (flags & 0x0100) {
-        if (off + 2 <= d.byteLength) {
-            document.getElementById('val-power').textContent = d.getInt16(off, true);
+        // Bit 3 = 1 → Cadence (Instantaneous Step Rate) présente
+        if (flags & 0x0008) {
+            if (off + 2 <= d.byteLength) {
+                document.getElementById('val-cadence').textContent = d.getUint16(off, true);
+            }
+            off += 4; // Contient Instantaneous (2 bytes) + Average (2 bytes)
         }
-        off += 2;
-    }
-    if (flags & 0x0200) { off += 2; }          // Average Power
+        
+        if (flags & 0x0010) { off += 2; } // Sauter Stride Count
+        if (flags & 0x0020) { off += 4; } // Sauter Elevation Gain
+        if (flags & 0x0040) { off += 4; } // Sauter Inclination
+        if (flags & 0x0080) { off += 2; } // Sauter Resistance Level
 
-    // Bit 10 →  Expended Energy (Total uint16 + Per Hour uint16 + Per Min uint8)
-    if (flags & 0x0400) {
-        if (off + 2 <= d.byteLength) {
-            document.getElementById('val-calories').textContent = d.getUint16(off, true);
+        // Bit 8 = 1 → Puissance Instantanée présente (en Watts)
+        if (flags & 0x0100) {
+            if (off + 2 <= d.byteLength) {
+                document.getElementById('val-power').textContent = d.getInt16(off, true);
+            }
+            off += 2;
         }
-        off += 5;
-    }
+        if (flags & 0x0200) { off += 2; } // Sauter Average Power
 
-    if (!startTime) startTime = Date.now();
+        // Bit 10 = 1 → Énergie / Calories dépensées
+        if (flags & 0x0400) {
+            if (off + 2 <= d.byteLength) {
+                document.getElementById('val-calories').textContent = d.getUint16(off, true);
+            }
+            off += 5; // Total (2B) + Per Hour (2B) + Per Min (1B)
+        }
+
+        if (!startTime) startTime = Date.now();
+        
+    } catch (err) {
+        console.error("Erreur durant le décodage FTMS:", err);
+        setStatus(`Erreur data: ${err.message}`);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
-//  BOUCLE PRINCIPALE 1 Hz
+//  BOUCLE PRINCIPALE (Rafraîchissement 1 Hz)
 // ══════════════════════════════════════════════════════════════
 setInterval(() => {
-    // Avance sur la carte : 1 tick = 1 seconde → distance = speed/3.6 mètres
+    // Calcul de l'avancement sur la carte (Vitesse / 3.6 = mètres par seconde)
     if (currentSpeed > 0.2) {
         moveByMeters(currentSpeed / 3.6);
     }
-    // Chrono
+    // Mise à jour du chronomètre de session
     if (startTime) {
         const sec  = Math.floor((Date.now() - startTime) / 1000);
         const mm   = Math.floor(sec / 60);
@@ -364,7 +364,7 @@ function toggleSimulation() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  DEBUG (triple-tap sur le header pour afficher les bytes bruts)
+//  DEBUG (Triple-tap sur le bandeau du haut pour voir les paquets)
 // ══════════════════════════════════════════════════════════════
 let debugActive = false, tapCount = 0, tapTimer;
 
@@ -376,7 +376,7 @@ document.getElementById('header').addEventListener('click', () => {
         debugActive = !debugActive;
         document.getElementById('debug').style.display = debugActive ? 'block' : 'none';
         tapCount = 0;
-        setStatus(debugActive ? '🐛 Debug activé (bytes FTMS bruts)' : 'Debug désactivé');
+        setStatus(debugActive ? '🐛 Debug activé (Visualisation des flux)' : 'Debug désactivé');
     }
 });
 
@@ -389,14 +389,11 @@ function debugBytes(dataView) {
     document.getElementById('debug').textContent = `BYTES: ${bytes}\nFLAGS: ${flags}`;
 }
 
-// ══════════════════════════════════════════════════════════════
-//  UTILITAIRES
-// ══════════════════════════════════════════════════════════════
 function setStatus(msg) {
     document.getElementById('status').textContent = msg;
 }
 
-// Tente de récupérer la position GPS réelle
+// Localisation GPS initiale
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
         p => {
@@ -405,10 +402,10 @@ if (navigator.geolocation) {
             playerMarker.setLatLng([pos.lat, pos.lng]);
             pathCoords[0] = [pos.lat, pos.lng];
             map.setView([pos.lat, pos.lng], 16);
-            setStatus('📍 Position GPS — connecte l\'elliptique ou utilise ▶ Simuler');
+            setStatus('📍 Position GPS synchronisée — connecte l\'elliptique !');
         },
         () => {
-            setStatus('Position: Liège (défaut) — connecte l\'elliptique ou utilise ▶ Simuler');
+            setStatus('Position: Liège (par défaut) — connecte l\'elliptique !');
         }
     );
 }
