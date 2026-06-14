@@ -196,13 +196,13 @@ async function connectBluetooth() {
     const btn = document.getElementById('connect-btn');
     btn.className = 'connecting';
     btn.textContent = '⏳ Scan...';
-    setStatus('Recherche de l\'elliptique en Bluetooth…');
+    setStatus('Recherche des appareils Bluetooth…');
 
     try {
-        // CORRECTION MAJEURE ICI : Utilisation de la méthode stricte de filtrage par service
-        // pour forcer le navigateur à exposer l'UUID FTMS sans planter.
+        // RETOUR A LA RECHERCHE LARGE : Permet de voir la liste complète des périphériques
         btDevice = await navigator.bluetooth.requestDevice({
-             filters: [{ services: [FTMS_SERVICE] }]
+             acceptAllDevices: true,
+             optionalServices: [FTMS_SERVICE]
         });
 
         btDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -234,7 +234,7 @@ async function connectBluetooth() {
         btn.className = '';
         btn.textContent = '📡 Connecter';
         if (err.name === 'NotFoundError') {
-            setStatus('Aucun appareil trouvé — allume l\'elliptique et réessaie');
+            setStatus('Scan annulé ou aucun appareil sélectionné');
         } else {
             setStatus(`Erreur: ${err.message}`);
         }
